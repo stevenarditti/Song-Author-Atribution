@@ -9,6 +9,8 @@ def debug(s):
         print(s)
 
 
+# gets a new OAuth2 session used for API calling.
+# call at begininng of script and use for all API retrievals
 def get_session():
     client_id = 'r3aOp51BYzVDSM6Pyjtr9YJj2VTUvPDgzaZqIsNmbnEWBMTUX0Ve-bJRtgXuOE8G'
     client_not_so_secret = 'XxYFdUG5wu5elBKZcabvqHjjd5E-bSCLT5xso1xc-NrtsUMarepeEDBZQPd6xvc1VRgrxykpQ'
@@ -23,12 +25,14 @@ def get_session():
     return service.get_session(access_token)
 
 
+# retrieves song data for given API song id
 def get_song(session, id):
     url = 'songs/' + id
     debug(url)
     return session.get(url, params={'format': 'json'}).json()['response']['song']
 
 
+# finds an artist's API id by pulling the top search result
 def find_artist_id(session, name):
     search = session.get('search', params={'q': name, 'format': 'json'}).json()
     # pull artist from first search result
@@ -38,10 +42,13 @@ def find_artist_id(session, name):
     return artist['name'], artist['api_path']
 
 
+# creates a list of artist IDs from a list of artist names
 def get_artist_paths(session, artists):
     paths = []
     for artist in artists:
         name, path = find_artist_id(session, artist)
+
+        # if there is a name discrepancy, it may have pulled the wrong artist
         if name != artist:
             print(f"Difference in API name:\n{artist} != {name}")
         paths.append(path)
@@ -49,12 +56,11 @@ def get_artist_paths(session, artists):
 
 
 def main():
-
     artist_list = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin']
 
     session = get_session()
 
-    # retrieve artist API urls
+    # retrieve artist API ids
     artist_api_paths = get_artist_paths(session, artist_list)
 
     print(artist_api_paths)
