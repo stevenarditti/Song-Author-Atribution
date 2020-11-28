@@ -27,13 +27,31 @@ def get_session():
 
 # retrieves song data for given API song id
 def get_song(session, id):
-    url = 'songs/' + id
-    debug(url)
-    return session.get(url, params={'format': 'json'}).json()['response']['song']
+    api_path = 'songs/' + id
+    debug(api_path)
+    return session.get(api_path, params={'format': 'json'}).json()['response']['song']
+
+# 
+def get_songs_from_artist(session, artist_path):
+    # api path for songs is: /artists/:id/songs
+    songs_path = artist_path + '/songs'
+    debug(f"API call to {songs_path}")
+    response = session.get(songs_path, params={'format': 'json', 'per_page': '5'}).json()
+    debug(f"reponse code: {response['meta']}")
+
+    print(len(response['response']['songs']))
+    for song in response['response']['songs']:
+        print(song['full_title'], song['primary_artist']['name'])
+
+
+
 
 
 # finds an artist's API id by pulling the top search result
 def find_artist_id(session, name):
+    # api path for artist is: /artists/:id
+    # api path for searches is: /search with 'q': :search_words in params
+
     search = session.get('search', params={'q': name, 'format': 'json'}).json()
     # pull artist from first search result
     # TODO, try catch? need to ensure this gives what we need
@@ -62,8 +80,12 @@ def main():
 
     # retrieve artist API ids
     artist_api_paths = get_artist_paths(session, artist_list)
+    debug(f"artist_api_paths: {artist_api_paths}")
 
-    print(artist_api_paths)
+    # retrieve songs from artists
+    for artist in artist_api_paths:
+        get_songs_from_artist(session, artist)
+        break
 
 
 if __name__ == '__main__':
