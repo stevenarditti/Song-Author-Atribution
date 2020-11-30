@@ -1,92 +1,36 @@
-from rauth import OAuth2Service
+import lyricsgenius
+import json
 
 
 DEBUG = True    # print debug statements
+MAX_SONGS = 50  # number of songs to pull per artist
+ARTISTS = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin']
 
 
-def debug(s):
+def __debug(s):
     if DEBUG:
         print(s)
 
 
-# gets a new OAuth2 session used for API calling.
-# call at begininng of script and use for all API retrievals
-def get_session():
-    client_id = 'r3aOp51BYzVDSM6Pyjtr9YJj2VTUvPDgzaZqIsNmbnEWBMTUX0Ve-bJRtgXuOE8G'
-    client_not_so_secret = 'XxYFdUG5wu5elBKZcabvqHjjd5E-bSCLT5xso1xc-NrtsUMarepeEDBZQPd6xvc1VRgrxykpQ'
+def __get_session():
     access_token = 'RMYdtaY1jKu2KArUDJXDV5aRh17IjVXLuRjZt7qm9Z17gg2ayLwOQYnxqqRmIAhh'
-
-    service = OAuth2Service(client_id=client_id,
-                            client_secret=client_not_so_secret,
-                            authorize_url='https://api.genius.com/oauth/authorize',
-                            access_token_url='https://api.genius.com/oauth/token',
-                            base_url='https://api.genius.com')
-
-    return service.get_session(access_token)
+    return lyricsgenius.Genius(access_token)
 
 
-# retrieves song data for given API song id
-def get_song(session, id):
-    api_path = 'songs/' + id
-    debug(api_path)
-    return session.get(api_path, params={'format': 'json'}).json()['response']['song']
+def get_lyric_data():
 
-# 
-def get_songs_from_artist(session, artist_path):
-    # api path for songs is: /artists/:id/songs
-    songs_path = artist_path + '/songs'
-    debug(f"API call to {songs_path}")
-    response = session.get(songs_path, params={'format': 'json', 'per_page': '5'}).json()
-    debug(f"reponse code: {response['meta']}")
+    session = __get_session()
 
-    print(len(response['response']['songs']))
-    for song in response['response']['songs']:
-        print(song['full_title'], song['primary_artist']['name'])
+    lyrics_json = {}
+    for artist in ARTISTS:
+        artist_result = session.search_artist(artist, max_songs=MAX_SONGS, sort="popularity")
 
-
-
-
-
-# finds an artist's API id by pulling the top search result
-def find_artist_id(session, name):
-    # api path for artist is: /artists/:id
-    # api path for searches is: /search with 'q': :search_words in params
-
-    search = session.get('search', params={'q': name, 'format': 'json'}).json()
-    # pull artist from first search result
-    # TODO, try catch? need to ensure this gives what we need
-    artist = search['response']['hits'][0]['result']['primary_artist']
-
-    return artist['name'], artist['api_path']
-
-
-# creates a list of artist IDs from a list of artist names
-def get_artist_paths(session, artists):
-    paths = []
-    for artist in artists:
-        name, path = find_artist_id(session, artist)
-
-        # if there is a name discrepancy, it may have pulled the wrong artist
-        if name != artist:
-            print(f"Difference in API name:\n{artist} != {name}")
-        paths.append(path)
-    return paths
-
-
-def main():
-    artist_list = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin']
-
-    session = get_session()
-
-    # retrieve artist API ids
-    artist_api_paths = get_artist_paths(session, artist_list)
-    debug(f"artist_api_paths: {artist_api_paths}")
-
-    # retrieve songs from artists
-    for artist in artist_api_paths:
-        get_songs_from_artist(session, artist)
-        break
-
-
-if __name__ == '__main__':
-    main()
+        lyrics = []
+        for song in artist_result.songs:
+            lyrics.append({song.title: song.lyrics})
+        
+        lyrics_json[artist] = lyrics
+    
+    f = open('lyrics.json', 'w')
+    json.dump(lyrics_json, f)
+    f.close()
