@@ -1,10 +1,17 @@
 import os
 import json
+from collections import Counter
 import dataclasses
 from dataclasses import dataclass
 
+DEBUG = True
 DATA_PATH = "data"
 DATA_FILE = os.path.join(DATA_PATH, "songs.json")
+
+
+def debug(s):
+    if DEBUG:
+        print(s)
 
 
 @dataclass
@@ -45,7 +52,7 @@ class Artist_Classifier:
         self.name = name
         self.class_labels = class_labels
 
-    def classify(song_lyrics):
+    def classify(self, song_lyrics):
         """ Takes lyrics and assigns the label of the most probable artist
             Args:
                 song_lyrics (TODO: Format lyrics): Lyrics to be attributed
@@ -53,7 +60,7 @@ class Artist_Classifier:
         """
         print("USE A SUBCLASS")
 
-    def train(songs, labels):
+    def train(self, songs, labels):
         """ Train classifier on given data and update internal model
             Args:
                 songs (TODO: Format lyrics): List of songs to train on
@@ -68,8 +75,43 @@ class Artist_Classifier:
 class Bag_of_Words_Artist_Classifier(Artist_Classifier):
     type_of_classifier = "bag-of-words"
 
+    # self.bag:     bag of words, 1 per class
+    # counts of total examples for class
+    # counts of total words for each class
+    # total examples
+    # vocab
+    # vocab size
+
+
     def __init__(self, name, class_labels):
         super().__init__(name, class_labels)
+
+        self.num_artists = len(class_labels)
+        self.bag = {artist: Counter() for artist in self.class_labels}
+        self.songs_per_artist = {0 for artist in self.class_labels}
+        self.words_per_artist = {0 for artist in self.class_labels}
+        self.total_songs = 0
+        self.vocab = {set() for artist in self.class_labels}
+        self.vocab_sizes = {0 for artist in self.class_labels}
+
+    
+    def train(self, songs, labels):
+        for song in songs:
+            artist = songs.artist
+            self.songs_per_artist[artist] += 1
+            self.total_songs += 1
+            for word in song.lyrics.split():
+                self.bag[artist][word] += 1
+                self.words_per_artist[artist] += 1
+                if word not in self.vocab[artist]:
+                    self.vocab[artist].append(word)
+                    self.vocab_size[artist] += 1
+
+    def classify(self, song_lyrics):
+        pass
+
+
+
 
 
 class Logistic_Regression_Artist_Classifier(Artist_Classifier):
@@ -94,10 +136,11 @@ class Recurrent_Neural_Net_Artist_Classifier(Artist_Classifier):
 
 
 # Example classifier declarations
-a = Bag_of_Words_Artist_Classifier("Bag-of-words general", ["Kendrick Lamar", "The Beatles", "Led Zeplin"])
-b = Logistic_Regression_Artist_Classifier("LogRes for pop", ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin'])
-c = Feed_Forward_Neural_Net_Artist_Classifier("FFNN for country", ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin'])
-d = Recurrent_Neural_Net_Artist_Classifier("RNN for rap", ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin'])
+class_labels = ["Kendrick Lamar", "The Beatles", "Led Zeplin"]
+a = Bag_of_Words_Artist_Classifier("Bag-of-words general", )
+b = Logistic_Regression_Artist_Classifier("LogRes for pop", class_labels)
+c = Feed_Forward_Neural_Net_Artist_Classifier("FFNN for country", class_labels)
+d = Recurrent_Neural_Net_Artist_Classifier("RNN for rap", class_labels)
 print(a)
 print(b)
 print(c)
