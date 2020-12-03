@@ -3,6 +3,7 @@ import json
 from collections import Counter
 import dataclasses
 from dataclasses import dataclass
+import numpy as np
 
 DEBUG = True
 DATA_PATH = "data"
@@ -47,6 +48,27 @@ def store_data(list_of_songs):
     print("Success")
 
 
+def sigmoid(x):
+    """ The sigmoid function
+        Arguments:
+            x: input to the sigmoud function
+        Return:
+            sigmoid(x)
+    """
+    return 1 / (1 + np.exp(-1 * x))
+
+
+def softmax(x):
+    """ The softmax function
+        Arguments:
+            x: input to the softmax function
+        Return:
+            softmax(x)
+    """
+    total = np.sum([np.exp(j) for j in x])
+    return [np.exp(i) / total for i in x]
+
+
 class Artist_Classifier:
     def __init__(self, name, class_labels):
         self.name = name
@@ -82,36 +104,44 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
     # vocab
     # vocab size
 
-
     def __init__(self, name, class_labels):
         super().__init__(name, class_labels)
 
         self.num_artists = len(class_labels)
         self.bag = {artist: Counter() for artist in self.class_labels}
-        self.songs_per_artist = {0 for artist in self.class_labels}
-        self.words_per_artist = {0 for artist in self.class_labels}
+        self.songs_per_artist = {artist: 0 for artist in self.class_labels}
+        self.words_per_artist = {artist: 0 for artist in self.class_labels}
         self.total_songs = 0
-        self.vocab = {set() for artist in self.class_labels}
-        self.vocab_sizes = {0 for artist in self.class_labels}
+        self.vocab = set()    #{artist: set() for artist in self.class_labels}
+        self.vocab_size = 0   #{artist: 0 for artist in self.class_labels}
 
-    
-    def train(self, songs, labels):
+    def train(self, songs):
         for song in songs:
-            artist = songs.artist
+            artist = song.artist
             self.songs_per_artist[artist] += 1
             self.total_songs += 1
-            for word in song.lyrics.split():
+            for word in song.lyrics.lower().split():
                 self.bag[artist][word] += 1
                 self.words_per_artist[artist] += 1
-                if word not in self.vocab[artist]:
-                    self.vocab[artist].append(word)
-                    self.vocab_size[artist] += 1
+                if word not in self.vocab:
+                    self.vocab.add(word)
+                    self.vocab_size += 1
+
+    def score(self, song_lyrics):
+        words = song_lyrics.split()
+        probs = {}
+        for artist in self.class_labels:
+            prob = np.log(self.songs_per_artist[artist] / self.total_songs)
+            denom = (self.words_per_artist[artist] + self.vocab_size)
+            for word in words:
+                if word in self.vocab:
+                    prob += np.log(((self.bag[artist][word]) + 1) / denom)
+            probs[str(artist)] = np.e ** prob
+        return probs
 
     def classify(self, song_lyrics):
-        pass
-
-
-
+        scores = self.score(song_lyrics.lower())
+        return max(scores, key=scores.get)
 
 
 class Logistic_Regression_Artist_Classifier(Artist_Classifier):
@@ -119,6 +149,40 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
 
     def __init__(self, name, class_labels):
         super().__init__(name, class_labels)
+        self.bias = 1
+        self.weights = [[1, 1, 1, 1, 1, self.bias] for _ in range(len(class_labels))]
+        self.learning_rate = 0.4
+
+    def train(self, songs):
+        # Updates the classifier against given input examples
+        for song in songs:
+            features = self.featurize(song.lyrics)
+            n = [np.dot(weight, features) for weight in self.weights]
+            prob = softmax(n)
+            # Calculate gradients for each weight
+            idx = self.class_labels.index(song.artist)
+            grads = (-np.log(prob[idx])) * np.array(features)
+
+            # Update weights
+            self.weights[idx] = self.weights[idx] - (self.learning_rate * grads)
+            local_bias = self.weights[idx][-1]
+            self.weights = [np.append(weight[:-1], local_bias) for weight in self.weights]
+        print("Done training")
+
+    def featurize(self, lyrics):
+        # F1 number of words
+        # F2 number unique words / number of words
+        # F3 sentimen {0 negative, .5 neutral, 1 positive}
+        # F4 nouns in song
+        # F5 verbs in song
+        # F6 adjectives in song
+        # F7 number of named entities if it can be done "cheaply"
+        return [1, 1, 1, 1, 1, 1]
+
+    def classify(self, song_lyrics):
+        features = self.featurize(song_lyrics)
+        prob = softmax(np.dot(self.weights, features))
+        return self.class_labels(np.argmax(prob))
 
 
 class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
@@ -136,6 +200,7 @@ class Recurrent_Neural_Net_Artist_Classifier(Artist_Classifier):
 
 
 # Example classifier declarations
+"""
 class_labels = ["Kendrick Lamar", "The Beatles", "Led Zeplin"]
 a = Bag_of_Words_Artist_Classifier("Bag-of-words general", )
 b = Logistic_Regression_Artist_Classifier("LogRes for pop", class_labels)
@@ -159,3 +224,4 @@ store_data(songs)
 print(songs)
 songs = load_data()
 print(songs)
+"""
