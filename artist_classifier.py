@@ -47,6 +47,18 @@ def store_data(list_of_songs):
         data_file.write(json.dumps(songs))
     print("Success")
 
+def generate_labels(list_of_songs, list_of_artists):
+    """ Save list of songs to a local json copy
+        Args:
+            list_of_songs(list(Song)): songs for labels to be extracted from
+            list_of_artists(list(string)): artist name, each label will be an index of this list
+        Returns: list of labels, (0-10) corresponding to the artist
+    """
+    labels = []
+    for song in list_of_songs:
+        labels.append(list_of_artists.index(song.artist))
+    return labels
+
 
 def sigmoid(x):
     """ The sigmoid function
