@@ -59,6 +59,65 @@ def generate_labels(list_of_songs, list_of_artists):
         labels.append(list_of_artists.index(song.artist))
     return labels
 
+def get_label_counts(predictions, labels):
+    true_pos, true_neg, false_pos, false_neg = 0
+
+    for class_label in range(max(labels)):
+        for idx, prediction in enumerate(predictions):
+            if prediction == class_label and labels[idx] == class_label:
+                true_pos += 1
+            elif prediction == class_label and labels[idx] != class_label:
+                false_pos += 1
+            elif prediction != class_label and labels[idx] == class_label:
+                false_neg += 1
+            elif prediction != class_label and labels[idx] != class_label:
+                true_neg += 1
+    return true_pos, true_neg, false_pos, false_neg
+
+
+def accuracy(predictions, labels):
+    """ Overall prediction accuracy
+    Arguments:
+        predictions: list of predicted labels
+        labels:      true labels
+    Returns accuracy(float)
+    """
+    if len(predictions) != len(labels):
+        print("Predictions and labels are different sizes. Exiting...")
+        return
+
+    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
+    return true_pos / len(predictions)
+
+def precision(predictions, labels):
+    """ Macroaverage precision
+    Arguments:
+        predictions: list of predicted labels
+        labels:      true labels
+    Returns precision(float)
+    """
+    if len(predictions) != len(labels):
+        print("Predictions and labels are different sizes. Exiting...")
+        return
+
+    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
+    return true_pos / (true_pos+false_pos)
+
+def recall(predictions, labels):
+    """ Macroaverage recall
+    Arguments:
+        predictions: list of predicted labels
+        labels:      true labels
+    Returns recall(float)
+    """
+    if len(predictions) != len(labels):
+        print("Predictions and labels are different sizes. Exiting...")
+        return
+
+    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
+    return true_pos / (true_pos+false_neg)
+
+
 
 def sigmoid(x):
     """ The sigmoid function
