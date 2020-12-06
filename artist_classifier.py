@@ -218,7 +218,7 @@ class Artist_Classifier:
         noun, verb, adj = getNounVerbAdj(lyrics)
 
         # F7 number of named entities if it can be done "cheaply" PROBABLY NOT
-        print([np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words])
+        #print([np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words])
         return [np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words]
 
     def preprocess_lyrics(self, lyrics):
@@ -243,13 +243,14 @@ class Artist_Classifier:
         Use one hot vectors to encode the labels (see the to_categorical function)
         """
         counter = 0
-        x_gen = y_gen = np.array([])
+        x_gen = y_gen = []
         while counter < len(X):
-            for i in range(num_sequences_per_batch):
-                np.append(x_gen, X[i + counter*i])
-                np.append(y_gen, y[i + counter*i])
-            print(x_gen)
-            yield x_gen, y_gen
+            for i in range(counter, counter+num_sequences_per_batch):
+                x_gen.append(self.featurize(X[i]))
+                y_vec = [0 for c in self.class_labels]
+                y_vec[self.class_labels.index(y[i])] = 1
+                y_gen.append(y_vec)
+            yield np.array(x_gen), np.array(y_gen)
             counter += num_sequences_per_batch
 
     def __str__(self):
@@ -353,6 +354,9 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
         steps_per_epoch_spooky = len(songs) // self.num_sequences_per_batch
         X = [song.lyrics for song in songs]
         y = [song.artist for song in songs]
+        data_gen2 = self.data_generator(X, y, self.num_sequences_per_batch)
+        print(len(X), len(y))
+        print(*next(data_gen2))
         data_gen = self.data_generator(X, y, self.num_sequences_per_batch)
         self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch_spooky)
 
