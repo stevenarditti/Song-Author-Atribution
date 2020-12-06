@@ -28,9 +28,9 @@ def get_lyric_data():
         lyrics = []
         for song in artist_result.songs:
             lyrics.append({song.title: song.lyrics})
-        
+
         lyrics_json[artist] = lyrics
-    
+
     f = open('lyrics.json', 'w')
     json.dump(lyrics_json, f)
     f.close()
