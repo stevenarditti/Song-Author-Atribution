@@ -5,9 +5,27 @@ import dataclasses
 from dataclasses import dataclass
 import numpy as np
 
+from nltk.corpus import stopwords
+from nltk import pos_tag, download
+from nltk.tokenize import word_tokenize
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+from keras.preprocessing.text import Tokenizer
+from keras.utils import to_categorical
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import SimpleRNN
+from keras.layers import Embedding
+
+download('vader_lexicon')
+download('averaged_perceptron_tagger')
+STOPWORDS = stopwords.words('english')
+SENTIMENT_ANALYZER = SentimentIntensityAnalyzer()
+
 DEBUG = True
 DATA_PATH = "data"
 DATA_FILE = os.path.join(DATA_PATH, "songs.json")
+FEATURE_LENGTH = 6
 
 
 def debug(s):
@@ -81,6 +99,25 @@ def softmax(x):
     return [np.exp(i) / total for i in x]
 
 
+def getNounVerbAdj(sentence):
+    """ Counts the number of nouns, verbs, and adjs in a sentence
+        Arguments:
+            sentence(string): input sentence to tag
+        Return:
+            Number of nouns, verbs, and adjectives in a sentence
+    """
+    nouns = verbs = adjs = 0
+
+    for _, tag in pos_tag(word_tokenize(sentence)):
+        if tag in ["NS", "NNS", "NNP", "NNPS"]:
+            nouns += 1
+        elif tag in ["VB", "VBD", "VBG", "VBN", "VBP", "VBZ"]:
+            verbs += 1
+        elif tag in ["JJ", "JJR", "JJS"]:
+            adjs += 1
+    return nouns, verbs, adjs
+
+
 class Artist_Classifier:
     def __init__(self, name, class_labels):
         self.name = name
@@ -101,6 +138,60 @@ class Artist_Classifier:
                 labels (list of labesl): list of labels corresponding to songs
         """
         print("USE A SUBCLASS")
+
+    def featurize(self, lyrics):
+        # F1 number of words
+        num_words = len(lyrics) + 1
+
+        # F2 number unique words / number of words
+        unique_words = set()
+        for word in lyrics:
+            unique_words.add(word)
+        num_unique_words = len(unique_words) + 1
+
+
+        # F3 sentiment {0 negative, .5 neutral, 1 positive}
+        sentiment = SENTIMENT_ANALYZER.polarity_scores(lyrics)["pos"]
+
+        # F4 nouns in song
+        # F5 verbs in song
+        # F6 adjectives in song
+        noun, verb, adj = getNounVerbAdj(lyrics)
+
+        # F7 number of named entities if it can be done "cheaply" PROBABLY NOT
+        print([np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words])
+        return [np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words]
+
+    def preprocess_lyrics(self, lyrics):
+        stop_words = [".", ",", "\n", "a", "the", "is", "i", "am", "are"]
+        lyrics = lyrics.lower()
+        for word in stop_words:
+            lyrics = lyrics.replace(word, "")
+        return lyrics
+        """ More technically effective but worse results
+        processed_lyrics = ""
+        for word in lyrics.lower().replace(".", "").replace(",", "").split():
+            if word not in STOPWORDS:
+                processed_lyrics += (word + " ")
+        return processed_lyrics[0:-1]"""
+
+    def data_generator(self, X, y, num_sequences_per_batch):
+        """
+        Returns data generator to be used by feed_forward
+        https://wiki.python.org/moin/Generators
+        https://realpython.com/introduction-to-python-generators/
+        Yields batches of embeddings and labels to go with them.
+        Use one hot vectors to encode the labels (see the to_categorical function)
+        """
+        counter = 0
+        x_gen = y_gen = np.array([])
+        while counter < len(X):
+            for i in range(num_sequences_per_batch):
+                np.append(x_gen, X[i + counter*i])
+                np.append(y_gen, y[i + counter*i])
+            print(x_gen)
+            yield x_gen, y_gen
+            counter += num_sequences_per_batch
 
     def __str__(self):
         return f"{self.name} with {len(self.class_labels)} possible artists"
@@ -163,7 +254,7 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
         super().__init__(name, class_labels)
         self.bias = 1
         self.weights = [[1, 1, 1, 1, 1, self.bias] for _ in range(len(class_labels))]
-        self.learning_rate = 0.4
+        self.learning_rate = 0.012
 
     def train(self, songs):
         # Updates the classifier against given input examples
@@ -171,37 +262,45 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
             features = self.featurize(song.lyrics)
             n = [np.dot(weight, features) for weight in self.weights]
             prob = softmax(n)
+            #print(prob)
             # Calculate gradients for each weight
             idx = self.class_labels.index(song.artist)
-            grads = (-np.log(prob[idx])) * np.array(features)
+            grads = (-np.log(prob[idx] + 0.00001)) * np.array(features)
 
             # Update weights
-            self.weights[idx] = self.weights[idx] - (self.learning_rate * grads)
+            self.weights[idx] = self.weights[idx] + (self.learning_rate * grads)
             local_bias = self.weights[idx][-1]
             self.weights = [np.append(weight[:-1], local_bias) for weight in self.weights]
-        print("Done training")
-
-    def featurize(self, lyrics):
-        # F1 number of words
-        # F2 number unique words / number of words
-        # F3 sentimen {0 negative, .5 neutral, 1 positive}
-        # F4 nouns in song
-        # F5 verbs in song
-        # F6 adjectives in song
-        # F7 number of named entities if it can be done "cheaply"
-        return [1, 1, 1, 1, 1, 1]
+        print(self.weights)
 
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
         prob = softmax(np.dot(self.weights, features))
-        return self.class_labels(np.argmax(prob))
+        return self.class_labels[np.argmax(prob)]
 
 
 class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
     type_of_classifier = "feed_forward_neural_net"
 
-    def __init__(self, name, class_labels):
+    def __init__(self, name, class_labels, num_sequences_per_batch=25):
         super().__init__(name, class_labels)
+        self.num_sequences_per_batch = num_sequences_per_batch
+        self.nn = Sequential()
+        self.nn.add(Dense(FEATURE_LENGTH, input_shape=(6, ), activation='relu'))
+        self.nn.add(Dense(FEATURE_LENGTH, activation='softmax'))
+        self.nn.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    def train(self, songs):
+        steps_per_epoch_spooky = len(songs) // self.num_sequences_per_batch
+        X = [song.lyrics for song in songs]
+        y = [song.artist for song in songs]
+        data_gen = self.data_generator(X, y, self.num_sequences_per_batch)
+        self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch_spooky)
+
+    def classify(self, song_lyrics):
+        features = self.featurize(song_lyrics)
+        print(self.nn.predict([features]))
+        return self.nn.predict([features])
 
 
 class Recurrent_Neural_Net_Artist_Classifier(Artist_Classifier):
