@@ -243,13 +243,15 @@ class Artist_Classifier:
         Use one hot vectors to encode the labels (see the to_categorical function)
         """
         counter = 0
-        x_gen = y_gen = []
         while counter < len(X):
-            for i in range(counter, counter+num_sequences_per_batch):
+            x_gen = []
+            y_gen = []
+            for i in range(counter, min(counter+num_sequences_per_batch, len(X))):
                 x_gen.append(self.featurize(X[i]))
                 y_vec = [0 for c in self.class_labels]
                 y_vec[self.class_labels.index(y[i])] = 1
                 y_gen.append(y_vec)
+            print(counter, len(x_gen), len(y_gen))
             yield np.array(x_gen), np.array(y_gen)
             counter += num_sequences_per_batch
 
@@ -346,23 +348,21 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
         super().__init__(name, class_labels)
         self.num_sequences_per_batch = num_sequences_per_batch
         self.nn = Sequential()
-        self.nn.add(Dense(FEATURE_LENGTH, input_shape=(6, ), activation='relu'))
-        self.nn.add(Dense(FEATURE_LENGTH, activation='softmax'))
+        self.nn.add(Dense(FEATURE_LENGTH, input_shape=(FEATURE_LENGTH,), activation='relu'))
+        self.nn.add(Dense(FEATURE_LENGTH*2, activation='relu'))
+        self.nn.add(Dense(len(self.class_labels), activation='softmax'))
         self.nn.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     def train(self, songs):
-        steps_per_epoch_spooky = len(songs) // self.num_sequences_per_batch
+        steps_per_epoch = len(songs) // self.num_sequences_per_batch
         X = [song.lyrics for song in songs]
         y = [song.artist for song in songs]
-        data_gen2 = self.data_generator(X, y, self.num_sequences_per_batch)
-        print(len(X), len(y))
-        print(*next(data_gen2))
         data_gen = self.data_generator(X, y, self.num_sequences_per_batch)
-        self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch_spooky)
+        data_gen2 = self.data_generator(X, y, self.num_sequences_per_batch)
+        self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch)
 
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
-        print(self.nn.predict([features]))
         return self.nn.predict([features])
 
 
