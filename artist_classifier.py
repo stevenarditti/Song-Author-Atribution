@@ -65,6 +65,7 @@ def store_data(list_of_songs):
         data_file.write(json.dumps(songs))
     print("Success")
 
+
 def generate_labels(list_of_songs, list_of_artists):
     """ Save list of songs to a local json copy
         Args:
@@ -76,6 +77,7 @@ def generate_labels(list_of_songs, list_of_artists):
     for song in list_of_songs:
         labels.append(list_of_artists.index(song.artist))
     return labels
+
 
 def get_label_counts(predictions, labels):
     true_pos, true_neg, false_pos, false_neg = 0
@@ -107,6 +109,7 @@ def accuracy(predictions, labels):
     true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
     return true_pos / len(predictions)
 
+
 def precision(predictions, labels):
     """ Macroaverage precision
     Arguments:
@@ -121,6 +124,7 @@ def precision(predictions, labels):
     true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
     return true_pos / (true_pos+false_pos)
 
+
 def recall(predictions, labels):
     """ Macroaverage recall
     Arguments:
@@ -134,7 +138,6 @@ def recall(predictions, labels):
 
     true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
     return true_pos / (true_pos+false_neg)
-
 
 
 def sigmoid(x):
@@ -177,6 +180,28 @@ def getNounVerbAdj(sentence):
     return nouns, verbs, adjs
 
 
+def lines_from_song(song_lyrics):
+    ret = []
+    for line in song_lyrics.split("\n"):
+        if "[" not in line:
+            ret.append(line)
+    return ret
+
+
+def preprocess_lyrics(lyrics):
+    """stop_words = [".", ",", "\n", "a", "the", "is", "i", "am", "are"]
+    lyrics = lyrics.lower()
+    for word in stop_words:
+        lyrics = lyrics.replace(word, "")
+    return lyrics"""
+    processed_lyrics = ""
+    for word in lyrics.lower().replace(".", "").replace(",", "").split():
+        if word not in STOPWORDS:
+            processed_lyrics += (word + " ")
+    return processed_lyrics[0:-1]
+
+
+
 class Artist_Classifier:
     def __init__(self, name, class_labels):
         self.name = name
@@ -201,6 +226,7 @@ class Artist_Classifier:
     def featurize(self, lyrics):
         # F1 number of words
         num_words = len(lyrics) + 1
+        #return [np.log(num_words)]
 
         # F2 number unique words / number of words
         unique_words = set()
@@ -219,20 +245,7 @@ class Artist_Classifier:
 
         # F7 number of named entities if it can be done "cheaply" PROBABLY NOT
         #print([np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words])
-        return [np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words]
-
-    def preprocess_lyrics(self, lyrics):
-        stop_words = [".", ",", "\n", "a", "the", "is", "i", "am", "are"]
-        lyrics = lyrics.lower()
-        for word in stop_words:
-            lyrics = lyrics.replace(word, "")
-        return lyrics
-        """ More technically effective but worse results
-        processed_lyrics = ""
-        for word in lyrics.lower().replace(".", "").replace(",", "").split():
-            if word not in STOPWORDS:
-                processed_lyrics += (word + " ")
-        return processed_lyrics[0:-1]"""
+        return [np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words, 1]
 
     def data_generator(self, X, y, num_sequences_per_batch):
         """
@@ -315,7 +328,7 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
     def __init__(self, name, class_labels):
         super().__init__(name, class_labels)
         self.bias = 1
-        self.weights = [[1, 1, 1, 1, 1, self.bias] for _ in range(len(class_labels))]
+        self.weights = [[1, 1, 1, 1, 1, 1, self.bias] for _ in range(len(class_labels))]
         self.learning_rate = 0.012
 
     def train(self, songs):
