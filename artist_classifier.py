@@ -4,6 +4,8 @@ from collections import Counter
 import dataclasses
 from dataclasses import dataclass
 import numpy as np
+import statistics as stats
+import spacy
 
 from nltk.corpus import stopwords
 from nltk import pos_tag, download
@@ -25,7 +27,10 @@ SENTIMENT_ANALYZER = SentimentIntensityAnalyzer()
 DEBUG = True
 DATA_PATH = "data"
 DATA_FILE = os.path.join(DATA_PATH, "songs.json")
-FEATURE_LENGTH = 6
+FEATURE_WORDS = 400
+EMBEDDING_SIZE = 300
+FEATURE_LENGTH = FEATURE_WORDS * EMBEDDING_SIZE 
+PAD = 'qqqqqqqqq'
 
 
 def debug(s):
@@ -181,6 +186,7 @@ class Artist_Classifier:
     def __init__(self, name, class_labels):
         self.name = name
         self.class_labels = class_labels
+        self.embeddings = spacy.load("en_core_web_md")
 
     def classify(self, song_lyrics):
         """ Takes lyrics and assigns the label of the most probable artist
@@ -198,6 +204,7 @@ class Artist_Classifier:
         """
         print("USE A SUBCLASS")
 
+    """
     def featurize(self, lyrics):
         # F1 number of words
         num_words = len(lyrics) + 1
@@ -220,6 +227,22 @@ class Artist_Classifier:
         # F7 number of named entities if it can be done "cheaply" PROBABLY NOT
         #print([np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words])
         return [np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words]
+    """
+
+    def featurize(self, lyrics):
+        words = lyrics.split()
+        if len(words) > FEATURE_WORDS:
+            words = words[:FEATURE_WORDS]
+        elif len(words) < FEATURE_WORDS:
+            words.extend([PAD] * (FEATURE_WORDS-len(words)))
+        sliced = " ".join(words)
+        tokens = self.embeddings(sliced)
+        vectors = []
+        for vec in [tok.vector for tok in tokens]:
+            vectors.extend(vec)
+        print(len(vectors))
+        #print(vectors[-5:])
+        return vectors
 
     def preprocess_lyrics(self, lyrics):
         stop_words = [".", ",", "\n", "a", "the", "is", "i", "am", "are"]
@@ -348,8 +371,7 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
         super().__init__(name, class_labels)
         self.num_sequences_per_batch = num_sequences_per_batch
         self.nn = Sequential()
-        self.nn.add(Dense(FEATURE_LENGTH, input_shape=(FEATURE_LENGTH,), activation='relu'))
-        self.nn.add(Dense(FEATURE_LENGTH*2, activation='relu'))
+        self.nn.add(Dense(1000, input_shape=(FEATURE_LENGTH,), activation='relu'))
         self.nn.add(Dense(len(self.class_labels), activation='softmax'))
         self.nn.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
@@ -358,7 +380,6 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
         X = [song.lyrics for song in songs]
         y = [song.artist for song in songs]
         data_gen = self.data_generator(X, y, self.num_sequences_per_batch)
-        data_gen2 = self.data_generator(X, y, self.num_sequences_per_batch)
         self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch)
 
     def classify(self, song_lyrics):
