@@ -1,12 +1,10 @@
 import os
 import json
 from collections import Counter
-import dataclasses
 from dataclasses import dataclass
 import numpy as np
-import spacy
 
-from scipy.special import softmax
+from scipy.special import softmax 
 
 from nltk import pos_tag
 from nltk.corpus import stopwords
@@ -68,31 +66,18 @@ def store_data(list_of_songs, filename=None):
     print("Success")
 
 
-def generate_labels(list_of_songs, list_of_artists):
-    """ Save list of songs to a local json copy
-        Args:
-            list_of_songs(list(Song)): songs for labels to be extracted from
-            list_of_artists(list(string)): artist name, each label will be an index of this list
-        Returns: list of labels, (0-10) corresponding to the artist
-    """
-    labels = []
-    for song in list_of_songs:
-        labels.append(list_of_artists.index(song.artist))
-    return labels
-
-
 def get_label_counts(predictions, labels):
-    true_pos, true_neg, false_pos, false_neg = 0
+    true_pos = true_neg = false_pos = false_neg = 0
 
-    for class_label in range(max(labels)):
+    for artist in set(labels):
         for idx, prediction in enumerate(predictions):
-            if prediction == class_label and labels[idx] == class_label:
+            if prediction == artist and prediction == labels[idx]:
                 true_pos += 1
-            elif prediction == class_label and labels[idx] != class_label:
+            elif prediction == artist and prediction != labels[idx]:
                 false_pos += 1
-            elif prediction != class_label and labels[idx] == class_label:
+            elif prediction != artist and prediction == labels[idx]:
                 false_neg += 1
-            elif prediction != class_label and labels[idx] != class_label:
+            elif prediction != artist and prediction != labels[idx]:
                 true_neg += 1
     return true_pos, true_neg, false_pos, false_neg
 
@@ -200,7 +185,6 @@ class Artist_Classifier:
         self.class_labels = class_labels
         self.vocab = set()
         self.vocab_size = 0
-        self.embeddings = spacy.load("en_core_web_md")
 
     def classify(self, song_lyrics):
         """ Takes lyrics and assigns the label of the most probable artist
@@ -246,7 +230,6 @@ class Artist_Classifier:
                 y_vec = [0 for c in self.class_labels]
                 y_vec[self.class_labels.index(y[i])] = 1
                 y_gen.append(y_vec)
-            print(counter, len(x_gen), len(y_gen))
             yield np.array(x_gen), np.array(y_gen)
             counter += num_sequences_per_batch
 
