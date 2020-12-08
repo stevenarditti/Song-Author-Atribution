@@ -4,32 +4,25 @@ from collections import Counter
 import dataclasses
 from dataclasses import dataclass
 import numpy as np
-import statistics as stats
 import spacy
 
-from nltk.corpus import stopwords
-from nltk import pos_tag, download
-from nltk.tokenize import word_tokenize
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from scipy.special import softmax
 
-from keras.preprocessing.text import Tokenizer
-from keras.utils import to_categorical
+from nltk import pos_tag
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
 from keras.models import Sequential
 from keras.layers import Dense
-from keras.layers import SimpleRNN
-from keras.layers import Embedding
 
-download('vader_lexicon')
-download('averaged_perceptron_tagger')
 STOPWORDS = stopwords.words('english')
-SENTIMENT_ANALYZER = SentimentIntensityAnalyzer()
 
 DEBUG = True
 DATA_PATH = "data"
 DATA_FILE = os.path.join(DATA_PATH, "songs.json")
 FEATURE_WORDS = 400
 EMBEDDING_SIZE = 300
-FEATURE_LENGTH = FEATURE_WORDS * EMBEDDING_SIZE 
+FEATURE_LENGTH = FEATURE_WORDS * EMBEDDING_SIZE
 PAD = 'qqqqqqqqq'
 
 
@@ -50,22 +43,26 @@ def print_song(song):
     print(f"{song.title} by {song.artist}({song.genre}):\n{song.lyrics}\n")
 
 
-def load_data():
+def load_data(filename=None):
     """ Load list of songs from local json copy
         Ret:
             List of Song as from local data
     """
-    with open(DATA_FILE, 'r', encoding='utf-8') as data_file:
+    if filename is None:
+        filename = DATA_FILE
+    with open(filename, 'r', encoding='utf-8') as data_file:
         return [Song(**song) for song in json.load(data_file)]
 
 
-def store_data(list_of_songs):
+def store_data(list_of_songs, filename=None):
     """ Save list of songs to a local json copy
         Args:
             list of songs(list(Song)): songs to be saved locally
     """
+    if filename is None:
+        filename = DATA_FILE
     print("Saving data locally...", end="")
-    with open(DATA_FILE, "w+", encoding='utf-8') as data_file:
+    with open(filename, "w+", encoding='utf-8') as data_file:
         songs = [dataclasses.asdict(song) for song in list_of_songs]
         data_file.write(json.dumps(songs))
     print("Success")
@@ -100,49 +97,56 @@ def get_label_counts(predictions, labels):
     return true_pos, true_neg, false_pos, false_neg
 
 
-def accuracy(predictions, labels):
+def accuracy(predictions, true_labels):
     """ Overall prediction accuracy
     Arguments:
         predictions: list of predicted labels
-        labels:      true labels
+        true_labels:      true labels
     Returns accuracy(float)
     """
-    if len(predictions) != len(labels):
+    if len(predictions) != len(true_labels):
         print("Predictions and labels are different sizes. Exiting...")
         return
 
-    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
+    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, true_labels)
     return true_pos / len(predictions)
 
 
-def precision(predictions, labels):
+def precision(predictions, true_labels):
     """ Macroaverage precision
     Arguments:
         predictions: list of predicted labels
-        labels:      true labels
+        true_labels:      true labels
     Returns precision(float)
     """
-    if len(predictions) != len(labels):
+    if len(predictions) != len(true_labels):
         print("Predictions and labels are different sizes. Exiting...")
         return
 
-    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
+    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, true_labels)
     return true_pos / (true_pos+false_pos)
 
 
-def recall(predictions, labels):
+def recall(predictions, true_labels):
     """ Macroaverage recall
     Arguments:
         predictions: list of predicted labels
         labels:      true labels
     Returns recall(float)
     """
-    if len(predictions) != len(labels):
+    if len(predictions) != len(true_labels):
         print("Predictions and labels are different sizes. Exiting...")
         return
 
-    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, labels)
+    true_pos, true_neg, false_pos, false_neg = get_label_counts(predictions, true_labels)
     return true_pos / (true_pos+false_neg)
+
+
+def f1_score(predictions, true_labels):
+    prec = precision(predictions, true_labels)
+    rec = recall(predictions, true_labels)
+
+    return (2 * prec * rec) / (prec + rec) if (prec + rec) != 0 else 0
 
 
 def sigmoid(x):
@@ -153,17 +157,6 @@ def sigmoid(x):
             sigmoid(x)
     """
     return 1 / (1 + np.exp(-1 * x))
-
-
-def softmax(x):
-    """ The softmax function
-        Arguments:
-            x: input to the softmax function
-        Return:
-            softmax(x)
-    """
-    total = np.sum([np.exp(j) for j in x])
-    return [np.exp(i) / total for i in x]
 
 
 def getNounVerbAdj(sentence):
@@ -194,11 +187,6 @@ def lines_from_song(song_lyrics):
 
 
 def preprocess_lyrics(lyrics):
-    """stop_words = [".", ",", "\n", "a", "the", "is", "i", "am", "are"]
-    lyrics = lyrics.lower()
-    for word in stop_words:
-        lyrics = lyrics.replace(word, "")
-    return lyrics"""
     processed_lyrics = ""
     for word in lyrics.lower().replace(".", "").replace(",", "").split():
         if word not in STOPWORDS:
@@ -206,17 +194,18 @@ def preprocess_lyrics(lyrics):
     return processed_lyrics[0:-1]
 
 
-
 class Artist_Classifier:
     def __init__(self, name, class_labels):
         self.name = name
         self.class_labels = class_labels
+        self.vocab = set()
+        self.vocab_size = 0
         self.embeddings = spacy.load("en_core_web_md")
 
     def classify(self, song_lyrics):
         """ Takes lyrics and assigns the label of the most probable artist
             Args:
-                song_lyrics (TODO: Format lyrics): Lyrics to be attributed
+                song_lyrics (list of Song): Lyrics to be attributed
             Ret: The most probably artist labels
         """
         print("USE A SUBCLASS")
@@ -224,52 +213,14 @@ class Artist_Classifier:
     def train(self, songs, labels):
         """ Train classifier on given data and update internal model
             Args:
-                songs (TODO: Format lyrics): List of songs to train on
-                labels (list of labesl): list of labels corresponding to songs
+                songs (list of Song): List of songs to train on
+                labels (list of string): list of labels corresponding to songs
         """
         print("USE A SUBCLASS")
 
-    """
     def featurize(self, lyrics):
-        # F1 number of words
-        num_words = len(lyrics) + 1
-        #return [np.log(num_words)]
-
-        # F2 number unique words / number of words
-        unique_words = set()
-        for word in lyrics:
-            unique_words.add(word)
-        num_unique_words = len(unique_words) + 1
-
-
-        # F3 sentiment {0 negative, .5 neutral, 1 positive}
-        sentiment = SENTIMENT_ANALYZER.polarity_scores(lyrics)["pos"]
-
-        # F4 nouns in song
-        # F5 verbs in song
-        # F6 adjectives in song
-        noun, verb, adj = getNounVerbAdj(lyrics)
-
-        # F7 number of named entities if it can be done "cheaply" PROBABLY NOT
-        #print([np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words], 1)
-
-        return [np.log(num_words), num_unique_words/num_words, sentiment, noun/num_words, verb/num_words, adj/num_words, 1]
-    """
-
-    def featurize(self, lyrics):
-        words = lyrics.split()
-        if len(words) > FEATURE_WORDS:
-            words = words[:FEATURE_WORDS]
-        elif len(words) < FEATURE_WORDS:
-            words.extend([PAD] * (FEATURE_WORDS-len(words)))
-        sliced = " ".join(words)
-        tokens = self.embeddings(sliced)
-        vectors = []
-        for vec in [tok.vector for tok in tokens]:
-            vectors.extend(vec)
-        print(len(vectors))
-        #print(vectors[-5:])
-        return vectors
+        word_list = lyrics.split()
+        return [word_list.count(word) for word in list(self.vocab)]
 
     def preprocess_lyrics(self, lyrics):
         stop_words = [".", ",", "\n", "a", "the", "is", "i", "am", "are"]
@@ -277,12 +228,6 @@ class Artist_Classifier:
         for word in stop_words:
             lyrics = lyrics.replace(word, "")
         return lyrics
-        """ More technically effective but worse results
-        processed_lyrics = ""
-        for word in lyrics.lower().replace(".", "").replace(",", "").split():
-            if word not in STOPWORDS:
-                processed_lyrics += (word + " ")
-        return processed_lyrics[0:-1]"""
 
     def data_generator(self, X, y, num_sequences_per_batch):
         """
@@ -312,13 +257,6 @@ class Artist_Classifier:
 class Bag_of_Words_Artist_Classifier(Artist_Classifier):
     type_of_classifier = "bag-of-words"
 
-    # self.bag:     bag of words, 1 per class
-    # counts of total examples for class
-    # counts of total words for each class
-    # total examples
-    # vocab
-    # vocab size
-
     def __init__(self, name, class_labels):
         super().__init__(name, class_labels)
 
@@ -327,8 +265,8 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
         self.songs_per_artist = {artist: 0 for artist in self.class_labels}
         self.words_per_artist = {artist: 0 for artist in self.class_labels}
         self.total_songs = 0
-        self.vocab = set()    #{artist: set() for artist in self.class_labels}
-        self.vocab_size = 0   #{artist: 0 for artist in self.class_labels}
+        self.vocab = set()
+        self.vocab_size = 0
 
     def train(self, songs):
         for song in songs:
@@ -365,16 +303,23 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
     def __init__(self, name, class_labels):
         super().__init__(name, class_labels)
         self.bias = 1
-        self.weights = [[1, 1, 1, 1, 1, 1, self.bias] for _ in range(len(class_labels))]
-        self.learning_rate = 0.012
+        self.weights = []
+        self.learning_rate = .01
 
     def train(self, songs):
         # Updates the classifier against given input examples
         for song in songs:
+            for word in song.lyrics.split():
+                self.vocab.add(word)
+        self.vocab_size = len(self.vocab)
+
+        self.weights = np.random.rand(len(self.class_labels), self.vocab_size)
+
+        for song in songs:
             features = self.featurize(song.lyrics)
             n = [np.dot(weight, features) for weight in self.weights]
             prob = softmax(n)
-            #print(prob)
+
             # Calculate gradients for each weight
             idx = self.class_labels.index(song.artist)
             grads = (-np.log(prob[idx] + 0.00001)) * np.array(features)
@@ -383,7 +328,6 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
             self.weights[idx] = self.weights[idx] + (self.learning_rate * grads)
             local_bias = self.weights[idx][-1]
             self.weights = [np.append(weight[:-1], local_bias) for weight in self.weights]
-        print(self.weights)
 
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
@@ -398,52 +342,25 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
         super().__init__(name, class_labels)
         self.num_sequences_per_batch = num_sequences_per_batch
         self.nn = Sequential()
-        self.nn.add(Dense(1000, input_shape=(FEATURE_LENGTH,), activation='relu'))
+
+    def train(self, songs):
+        for song in songs:
+            for word in song.lyrics.split():
+                self.vocab.add(word)
+
+        self.vocab_size = len(self.vocab)
+        self.nn.add(Dense(self.vocab_size, input_shape=(self.vocab_size,), activation='relu'))
         self.nn.add(Dense(len(self.class_labels), activation='softmax'))
         self.nn.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-    def train(self, songs):
         steps_per_epoch = len(songs) // self.num_sequences_per_batch
         X = [song.lyrics for song in songs]
         y = [song.artist for song in songs]
+
         data_gen = self.data_generator(X, y, self.num_sequences_per_batch)
+
         self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch)
 
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
-        return self.nn.predict([features])
-
-
-class Recurrent_Neural_Net_Artist_Classifier(Artist_Classifier):
-    type_of_classifier = "recurrent_neural_net"
-
-    def __init__(self, name, class_labels):
-        super().__init__(name, class_labels)
-
-
-# Example classifier declarations
-"""
-class_labels = ["Kendrick Lamar", "The Beatles", "Led Zeplin"]
-a = Bag_of_Words_Artist_Classifier("Bag-of-words general", )
-b = Logistic_Regression_Artist_Classifier("LogRes for pop", class_labels)
-c = Feed_Forward_Neural_Net_Artist_Classifier("FFNN for country", class_labels)
-d = Recurrent_Neural_Net_Artist_Classifier("RNN for rap", class_labels)
-print(a)
-print(b)
-print(c)
-print(d)
-print("\n\n")
-
-# Test the loading and storing of data
-x = Song("King Kunta", "Kendrick Lamar", "Rap", "I got a bone to pick...")
-y = Song("Yesterday", "The Beatles", "Rock", "All my troubles seemed so far away...")
-z = Song("Stairway to Heaven", "Led Zepplin", "Rock", "There's a lady who's sure. All that glitters is gold...")
-songs = [x, y, z]
-
-print_song(x)
-
-store_data(songs)
-print(songs)
-songs = load_data()
-print(songs)
-"""
+        return self.class_labels[np.argmax(self.nn.predict([features]))]

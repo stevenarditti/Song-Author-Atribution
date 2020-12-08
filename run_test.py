@@ -1,8 +1,8 @@
 import artist_classifier
-import api_data_retriever
 import random
+from sklearn.model_selection import train_test_split
 
-ARTISTS = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin']
+ARTISTS = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin', "Aerosmith", "Frank Sinatra", "Kanye West", "Eminem", "Red Hot Chili Peppers", "Queen", "Billy Joel", "Madonna", "Drake"]
 
 
 def getAccuracy(model, songs):
@@ -32,19 +32,19 @@ def main():
     for idx, song in enumerate(songs):
         song.lyrics = artist_classifier.preprocess_lyrics(cleaned_lyrics[idx])
 
+    train_data, test_data = train_test_split(songs)
+
     bow_classifier = artist_classifier.Bag_of_Words_Artist_Classifier("Test Bag-of-Words", ARTISTS)
-    bow_classifier.train(songs)
-    getAccuracy(bow_classifier, songs)
+    bow_classifier.train(train_data)
+    getAccuracy(bow_classifier, test_data)
 
     lr_classifier = artist_classifier.Logistic_Regression_Artist_Classifier("Test LogRes", ARTISTS)
-    lr_classifier.train(songs)
-    getAccuracy(lr_classifier, songs)
-
-    return
+    lr_classifier.train(train_data)
+    getAccuracy(lr_classifier, test_data)
 
     ffnn_classifier = artist_classifier.Feed_Forward_Neural_Net_Artist_Classifier("Test FFNN", ARTISTS)
-    ffnn_classifier.train(songs)
-    getAccuracy(ffnn_classifier, songs)
+    ffnn_classifier.train(train_data)
+    getAccuracy(ffnn_classifier, test_data)
 
 
 if __name__ == '__main__':

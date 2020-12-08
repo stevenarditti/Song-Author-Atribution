@@ -1,10 +1,10 @@
 import lyricsgenius
-import json
+from artist_classifier import Song
 
 
 DEBUG = True    # print debug statements
-MAX_SONGS = 50  # number of songs to pull per artist
-ARTISTS = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin']
+MAX_SONGS = 150  # number of songs to pull per artist
+ARTISTS = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin', "Aerosmith", "Frank Sinatra", "Kanye West", "Eminem", "Red Hot Chili Peppers", "Queen", "Billy Joel", "Madonna", "Drake"]
 
 
 def __debug(s):
@@ -17,20 +17,13 @@ def __get_session():
     return lyricsgenius.Genius(access_token)
 
 
-def get_lyric_data():
-
+def get_lyric_data(artist):
     session = __get_session()
+    output_songs = []
 
-    lyrics_json = {}
-    for artist in ARTISTS:
-        artist_result = session.search_artist(artist, max_songs=MAX_SONGS, sort="popularity")
+    artist_result = session.search_artist(artist, max_songs=MAX_SONGS, sort="popularity")
 
-        lyrics = []
-        for song in artist_result.songs:
-            lyrics.append({song.title: song.lyrics})
+    for song in artist_result.songs:
+        output_songs.append(Song(song.title, artist, None, song.lyrics))
 
-        lyrics_json[artist] = lyrics
-
-    f = open('lyrics.json', 'w')
-    json.dump(lyrics_json, f)
-    f.close()
+    return output_songs
