@@ -1,3 +1,17 @@
+""" Instructions for use:
+        Install the dependencies with "pip install -r requirements.txt"
+        Then run "python run_test.py" or however your interpretter is set up
+
+        The expected output of this code is a trained Naive Bayes classifier,
+        a logistic regression classifier, and a feed forward neural net classifier.
+        Their metrics will each be printed to the terminal.
+
+        The code will default to using all 12 datasets, however this option
+        will require a lot of ram(potentially 11GB). If you wish to run a
+        condensed version of the program, change the DATA_SETS varaible(line 23)
+        to a number between 1 and 12.
+"""
+
 import artist_classifier
 import random
 from sklearn.model_selection import train_test_split
@@ -6,6 +20,8 @@ from sklearn.metrics import classification_report
 import matplotlib.pyplot as plt
 
 ARTISTS = ['Kendrick Lamar', 'The Beatles', 'Led Zeppelin', "Aerosmith", "Frank Sinatra", "Kanye West", "Eminem", "Red Hot Chili Peppers", "Queen", "Billy Joel", "Madonna", "Drake"]
+DATA_SETS = 12
+
 
 def print_report(model, songs):
     """ Prints metric report of given model
@@ -23,6 +39,7 @@ def print_report(model, songs):
         true_labels.append(song.artist)
     print(f"{model}:")
     print(classification_report(true_labels, predicted, digits=3, zero_division=0))
+
 
 def plot_song_len(songs):
     """ Generates histogram of word count per song
@@ -43,7 +60,7 @@ def plot_song_len(songs):
         if word_count < 300:
             sub_300 += 1
         total_words += word_count
-    
+
     print(f"{(sub_200 * 100) // len(songs)}% of songs below 200")
     print(f"{(sub_300 * 100) // len(songs)}% of songs below 300")
     print(f"{total_words} total words across all songs")
@@ -59,6 +76,13 @@ def main():
     songs = artist_classifier.load_data()
     random.shuffle(songs)
 
+    if DATA_SETS != 12:
+        compressed_dataset = list()
+        for song in songs:
+            if song.artist in ARTISTS[0:DATA_SETS]:
+                compressed_dataset.append(song)
+        songs = compressed_dataset
+
     # Used to clean the input songs from genius
     cleaned_lyrics = [" ".join(artist_classifier.lines_from_song(song.lyrics)) for song in songs]
     for idx, song in enumerate(songs):
@@ -72,7 +96,6 @@ def main():
     bow_classifier = artist_classifier.Bag_of_Words_Artist_Classifier("Test Bag-of-Words", ARTISTS)
     bow_classifier.train(train_data)
     print("BOW done.")
-    
 
     print("Training logistic regression classifier...")
     lr_classifier = artist_classifier.Logistic_Regression_Artist_Classifier("Test LogRes", ARTISTS)
@@ -83,7 +106,6 @@ def main():
     ffnn_classifier = artist_classifier.Feed_Forward_Neural_Net_Artist_Classifier("Test FFNN", ARTISTS)
     ffnn_classifier.train(train_data)
     print("NN done.")
-
 
     # print reports
     print_report(bow_classifier, test_data)

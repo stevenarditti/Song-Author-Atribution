@@ -1,10 +1,11 @@
 import os
 import json
 from collections import Counter
+import dataclasses
 from dataclasses import dataclass
 import numpy as np
 
-from scipy.special import softmax 
+from scipy.special import softmax
 
 from nltk import pos_tag
 from nltk.corpus import stopwords
@@ -224,7 +225,6 @@ class Artist_Classifier:
         word_list = lyrics.split()
         return [word_list.count(word) for word in list(self.vocab)]
 
-
     def data_generator(self, X, y, num_sequences_per_batch):
         """
         Returns data generator to be used by feed_forward
@@ -263,7 +263,6 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
         self.vocab = set()
         self.vocab_size = 0
 
-
     def train(self, songs):
         # iterate through songs, gather Naive Bayes parameters
         for song in songs:
@@ -277,7 +276,6 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
                     self.vocab.add(word)
                     self.vocab_size += 1
 
-
     def score(self, song_lyrics):
         words = song_lyrics.split()
         probs = {}
@@ -289,7 +287,6 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
                     prob += np.log(((self.bag[artist][word]) + 1) / denom)
             probs[str(artist)] = np.e ** prob
         return probs
-
 
     def classify(self, song_lyrics):
         scores = self.score(song_lyrics.lower())
@@ -328,7 +325,6 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
             local_bias = self.weights[idx][-1]
             self.weights = [np.append(weight[:-1], local_bias) for weight in self.weights]
 
-
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
         prob = softmax(np.dot(self.weights, features))
@@ -342,7 +338,6 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
         super().__init__(name, class_labels)
         self.num_sequences_per_batch = num_sequences_per_batch
         self.nn = Sequential()
-
 
     def train(self, songs):
         for song in songs:
@@ -363,7 +358,6 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
 
         # train
         self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch)
-
 
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
