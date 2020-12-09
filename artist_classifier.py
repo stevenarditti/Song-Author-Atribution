@@ -15,18 +15,12 @@ from keras.layers import Dense
 
 STOPWORDS = stopwords.words('english')
 
-DEBUG = True
 DATA_PATH = "data"
 DATA_FILE = os.path.join(DATA_PATH, "songs.json")
 FEATURE_WORDS = 400
 EMBEDDING_SIZE = 300
 FEATURE_LENGTH = FEATURE_WORDS * EMBEDDING_SIZE
 PAD = 'qqqqqqqqq'
-
-
-def debug(s):
-    if DEBUG:
-        print(s)
 
 
 @dataclass
@@ -66,7 +60,14 @@ def store_data(list_of_songs, filename=None):
     print("Success")
 
 
+# unused in final version, included in submission
 def get_label_counts(predictions, labels):
+    """ gets counts of true / false positive / negative predictions
+    Arguments:
+        predictions: list of predicted labels
+        true_labels: true labels
+    Returns tuple of true positives, false positives, true negatives, and false negatives
+    """
     true_pos = true_neg = false_pos = false_neg = 0
 
     for artist in set(labels):
@@ -82,6 +83,7 @@ def get_label_counts(predictions, labels):
     return true_pos, true_neg, false_pos, false_neg
 
 
+# unused in final version, included in submission
 def accuracy(predictions, true_labels):
     """ Overall prediction accuracy
     Arguments:
@@ -97,6 +99,7 @@ def accuracy(predictions, true_labels):
     return true_pos / len(predictions)
 
 
+# unused in final version, included in submission
 def precision(predictions, true_labels):
     """ Macroaverage precision
     Arguments:
@@ -112,6 +115,7 @@ def precision(predictions, true_labels):
     return true_pos / (true_pos+false_pos)
 
 
+# unused in final version, included in submission
 def recall(predictions, true_labels):
     """ Macroaverage recall
     Arguments:
@@ -127,23 +131,21 @@ def recall(predictions, true_labels):
     return true_pos / (true_pos+false_neg)
 
 
+# unused in final version, included in submission
 def f1_score(predictions, true_labels):
+    """ Macroaverage f1
+    Arguments:
+        predictions: list of predicted labels
+        labels:      true labels
+    Returns f1(float)
+    """
     prec = precision(predictions, true_labels)
     rec = recall(predictions, true_labels)
 
     return (2 * prec * rec) / (prec + rec) if (prec + rec) != 0 else 0
 
 
-def sigmoid(x):
-    """ The sigmoid function
-        Arguments:
-            x: input to the sigmoud function
-        Return:
-            sigmoid(x)
-    """
-    return 1 / (1 + np.exp(-1 * x))
-
-
+# unused in final version, included in submission
 def getNounVerbAdj(sentence):
     """ Counts the number of nouns, verbs, and adjs in a sentence
         Arguments:
@@ -163,6 +165,16 @@ def getNounVerbAdj(sentence):
     return nouns, verbs, adjs
 
 
+def sigmoid(x):
+    """ The sigmoid function
+        Arguments:
+            x: input to the sigmoid function
+        Return:
+            sigmoid(x)
+    """
+    return 1 / (1 + np.exp(-1 * x))
+
+
 def lines_from_song(song_lyrics):
     ret = []
     for line in song_lyrics.split("\n"):
@@ -172,6 +184,12 @@ def lines_from_song(song_lyrics):
 
 
 def preprocess_lyrics(lyrics):
+    """
+        Arguments:
+            lyrics: lyrics to be processed
+        Return:
+            string, processed lyrics
+    """
     processed_lyrics = ""
     for word in lyrics.lower().replace(".", "").replace(",", "").split():
         if word not in STOPWORDS:
@@ -206,12 +224,6 @@ class Artist_Classifier:
         word_list = lyrics.split()
         return [word_list.count(word) for word in list(self.vocab)]
 
-    def preprocess_lyrics(self, lyrics):
-        stop_words = [".", ",", "\n", "a", "the", "is", "i", "am", "are"]
-        lyrics = lyrics.lower()
-        for word in stop_words:
-            lyrics = lyrics.replace(word, "")
-        return lyrics
 
     def data_generator(self, X, y, num_sequences_per_batch):
         """
@@ -251,7 +263,9 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
         self.vocab = set()
         self.vocab_size = 0
 
+
     def train(self, songs):
+        # iterate through songs, gather Naive Bayes parameters
         for song in songs:
             artist = song.artist
             self.songs_per_artist[artist] += 1
@@ -262,6 +276,7 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
                 if word not in self.vocab:
                     self.vocab.add(word)
                     self.vocab_size += 1
+
 
     def score(self, song_lyrics):
         words = song_lyrics.split()
@@ -274,6 +289,7 @@ class Bag_of_Words_Artist_Classifier(Artist_Classifier):
                     prob += np.log(((self.bag[artist][word]) + 1) / denom)
             probs[str(artist)] = np.e ** prob
         return probs
+
 
     def classify(self, song_lyrics):
         scores = self.score(song_lyrics.lower())
@@ -312,6 +328,7 @@ class Logistic_Regression_Artist_Classifier(Artist_Classifier):
             local_bias = self.weights[idx][-1]
             self.weights = [np.append(weight[:-1], local_bias) for weight in self.weights]
 
+
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
         prob = softmax(np.dot(self.weights, features))
@@ -326,23 +343,27 @@ class Feed_Forward_Neural_Net_Artist_Classifier(Artist_Classifier):
         self.num_sequences_per_batch = num_sequences_per_batch
         self.nn = Sequential()
 
+
     def train(self, songs):
         for song in songs:
             for word in song.lyrics.split():
                 self.vocab.add(word)
 
+        # initialize neural net
+        steps_per_epoch = len(songs) // self.num_sequences_per_batch
         self.vocab_size = len(self.vocab)
         self.nn.add(Dense(self.vocab_size, input_shape=(self.vocab_size,), activation='relu'))
         self.nn.add(Dense(len(self.class_labels), activation='softmax'))
         self.nn.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-        steps_per_epoch = len(songs) // self.num_sequences_per_batch
+        # generate data
         X = [song.lyrics for song in songs]
         y = [song.artist for song in songs]
-
         data_gen = self.data_generator(X, y, self.num_sequences_per_batch)
 
+        # train
         self.nn.fit(x=data_gen, epochs=1, steps_per_epoch=steps_per_epoch)
+
 
     def classify(self, song_lyrics):
         features = self.featurize(song_lyrics)
