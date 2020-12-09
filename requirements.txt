@@ -1,0 +1,5 @@
+lyricsgenius
+sklearn
+scipy
+nltk
+keras
